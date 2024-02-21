@@ -8,3 +8,10 @@ class Database:
         self.connection = sql.connect(db_file)
         self.cursor = self.connection.cursor()
         print('Database is online!')
+
+    async def get_user_by_id(self, telegram_id: int):
+        """
+        Gets users id from database.
+        :param telegram_id:
+        :return:
+        """
