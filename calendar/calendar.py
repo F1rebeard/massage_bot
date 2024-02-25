@@ -17,7 +17,7 @@ calendar_callback = CallbackData(
 )
 
 
-class WorkoutCalendar:
+class MassageCalendar:
     async def start_calendar(
             self,
             year: int = datetime.now().year,
