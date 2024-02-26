@@ -6,8 +6,8 @@ from constants import MASSAGES, OTHER_SERVICE, EXTRA_SERVICE
 def get_service_info(data: dict, unit: [str, int]) -> [str, int, int]:
     service_info = data.get(unit)
     name: str = service_info[0]
-    time: int = service_info[1]
-    price: int = service_info[2]
+    time: int = int(service_info[1])
+    price: int = int(service_info[2])
     return name, time, price
 
 
@@ -73,14 +73,10 @@ def extra_service_inline_keyboard() -> InlineKeyboardMarkup:
             callback_data='backward'
         )
     )
-
-
-def backward_button() -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup()
-    keyboard.add(
-        InlineKeyboardButton(text='Назад', callback_data='backwards')
-    )
     return keyboard
+
+
+extra_service_kb = extra_service_inline_keyboard()
 
 
 

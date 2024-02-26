@@ -11,7 +11,6 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from create_bot import db, bot
 from constants import RUS_MONTHS
 
-
 calendar_callback = CallbackData(
     'workout_calendar', 'act', 'year', 'month', 'day'
 )
@@ -134,7 +133,7 @@ class MassageCalendar:
             data: CallbackData
     ) -> tuple:
         """
-        Process the callback_query. This method generates a new calendar if
+        Process the callback_query. This method generates a new massage_calendar if
         forward or backward is pressed. This method should be called inside
          a CallbackQueryHandler.
         :param query: callback_query, as provided by the CallbackQueryHandler
@@ -144,7 +143,7 @@ class MassageCalendar:
         """
         return_data = (False, None)
         temp_date = datetime(int(data['year']), int(data['month']), 1)
-        # empty buttons in calendar, no actions
+        # empty buttons in massage_calendar, no actions
         if data['act'] == "IGNORE":
             await query.answer(cache_time=60)
         if data['act'] == "PREV-MONTH":
