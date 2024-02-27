@@ -10,7 +10,7 @@ async def working_time_and_days_inline(
     :param telegram_id:
     :return:
     """
-    workout_graphic = await db.get_workout_graphic(telegram_id)
+    workout_graphic = await db.get_master_work_graphic(telegram_id)
     week_graphic = {
         'Понедельник': (workout_graphic[0], 'monday'),
         'Вторник': (workout_graphic[1], 'tuesday'),
@@ -21,7 +21,7 @@ async def working_time_and_days_inline(
         'Воскресенье': (workout_graphic[6], 'sunday')
     }
     keyboard = InlineKeyboardMarkup(row_width=2)
-    for weekday, graphic in week_graphic.values():
+    for weekday, graphic in week_graphic.items():
         keyboard.row()
         keyboard.insert(
             InlineKeyboardButton(text=weekday, callback_data=graphic[1])

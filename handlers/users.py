@@ -17,6 +17,13 @@ from create_bot import bot, db
 from constants import ADMIN_IDS, MASSAGES, OTHER_SERVICE, EXTRA_SERVICE
 
 
+class UserActions(StatesGroup):
+    choose_date = State()
+    choose_service = State()
+    choose_extra = State()
+    gift_certificate = State()
+
+
 async def cancel_state(state: FSMContext) -> None:
     """
     Cancel the FSMContext machine state.
@@ -30,13 +37,6 @@ async def cancel_state(state: FSMContext) -> None:
         pass
 
 
-class UserActions(StatesGroup):
-    choose_date = State()
-    choose_service = State()
-    choose_extra = State()
-    gift_certificate = State()
-
-
 async def start_bot(message: Message, state: FSMContext):
     """
     Start the bot and check_
@@ -48,7 +48,7 @@ async def start_bot(message: Message, state: FSMContext):
     await cancel_state(state)
     if telegram_id in ADMIN_IDS:
         await message.answer(
-            text='Привет, коллега {message.from_user.first_name}',
+            text=f'Привет, коллега {message.from_user.first_name}',
             reply_markup=admin_menu
         )
     elif await db.get_user_by_id(telegram_id) is None:

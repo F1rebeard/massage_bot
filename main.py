@@ -3,13 +3,15 @@ import logging
 from aiogram import executor
 
 from create_bot import dp
-from handlers import users
+from handlers import users, masters
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s",
                     force=True)
 
 users.register_user_handlers(dp)
+masters.register_master_handlers(dp)
+
 
 async def on_startup(_):
     logging.info('Bot is online!')
