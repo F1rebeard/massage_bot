@@ -1,5 +1,6 @@
 import logging
 import datetime
+import re
 
 from aiogram import Dispatcher
 from aiogram.types import Message, CallbackQuery
@@ -92,12 +93,23 @@ async def update_working_hours(message: Message, state: FSMContext):
     :return:
     """
     telegram_id = message.from_user.id
-    async with state.proxy() as data:
-        await db.update_master_worktime(
-            telegram_id=telegram_id,
-            work_graphic=message.text,
-            query_data=data['selected_weekday'],
+    if not re.match(r"\d+-\d+(, \d+-\d+)*", message.text):
+        await message.answer(
+            'Неправильный формат ввода времени!\n\n'
+            'Введи в формате 9-12, 13-20 или 9-21 (без перерыва)'
         )
+    else:
+        async with state.proxy() as data:
+            await db.update_master_worktime(
+                telegram_id=telegram_id,
+                work_graphic=message.text,
+                query_data=data['selected_weekday'],
+            )
+        await message.answer(
+            'Новый график добавлен!',
+            reply_markup=await working_time_and_days_inline(telegram_id)
+        )
+        await state.set_state(MasterActions.working_day)
 
 
 
