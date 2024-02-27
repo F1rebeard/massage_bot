@@ -15,3 +15,11 @@ class Database:
         :param telegram_id:
         :return:
         """
+    async def get_master_work_graphic(self, telegram_id: int):
+        with self.connection:
+            work_graphic = self.cursor.execute(
+                "SELECT monday, tuesday, wednesday,"
+                " thursday, friday, saturday, sunday, days_off"
+                " FROM worktime"
+                " WHERE master_id = ?", (telegram_id,)
+            ).fetchone()[0]
