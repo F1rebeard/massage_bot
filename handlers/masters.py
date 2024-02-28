@@ -9,8 +9,11 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 
 from constants import ADMIN_IDS, WEEKDAYS
 from create_bot import db
+from massage_calendar.work_graph import get_working_hours_for_calendar
 from handlers.users import cancel_state
 from keyboards.master_kb import working_time_and_days_inline
+from keyboards.main_menu import admin_menu
+
 
 
 class MasterActions(StatesGroup):
@@ -48,9 +51,8 @@ async def working_time_menu(message: Message, state: FSMContext):
     :return:
     """
     telegram_id = message.from_user.id
-    await cancel_state(state)
-    logging.info('Ау')
     if telegram_id in ADMIN_IDS:
+        await cancel_state(state)
         await message.answer(
             'Назначь рабочее время на неделю:',
             reply_markup=await working_time_and_days_inline(telegram_id)
@@ -80,9 +82,11 @@ async def choose_workout_day(query: CallbackQuery, state: FSMContext):
             await query.message.edit_text(
                 f'Введи рабочие часы для работы во {weekday}:\n\n'
                 f'Вводить в формате: 9-12,13-21\n'
-                f'То есть рабочее время 9 до 21 с перерывом с 12 до 13'
+                f'То есть рабочее время 9 до 21 с перерывом с 12 до 13, если'
+                f'день недели нерабочий - вводим 0'
             )
             await state.set_state(MasterActions.working_hours)
+        await query.answer()
 
 
 async def update_working_hours(message: Message, state: FSMContext):
@@ -93,11 +97,13 @@ async def update_working_hours(message: Message, state: FSMContext):
     :return:
     """
     telegram_id = message.from_user.id
-    if not re.match(r"\d+-\d+(, \d+-\d+)*", message.text):
+    if not re.match(r"0|\d+-\d+(, \d+-\d+)*", message.text):
         await message.answer(
             'Неправильный формат ввода времени!\n\n'
-            'Введи в формате 9-12, 13-20 или 9-21 (без перерыва)'
+            'Введи в формате 9-12, 13-20 или 9-21 (без перерыва)',
+            reply_markup=admin_menu
         )
+        await get_working_hours_for_calendar()
     else:
         async with state.proxy() as data:
             await db.update_master_worktime(
@@ -106,11 +112,38 @@ async def update_working_hours(message: Message, state: FSMContext):
                 query_data=data['selected_weekday'],
             )
         await message.answer(
-            'Новый график добавлен!',
+            'График обновлен!',
             reply_markup=await working_time_and_days_inline(telegram_id)
         )
         await state.set_state(MasterActions.working_day)
 
+
+async def update_days_off(message: Message, state: FSMContext):
+    """
+
+    :param message:
+    :param state:
+    :return:
+    """
+    telegram_id = message.from_user.id
+    if not re.match(
+            r"^(([1-9]|[12][0-9]|3[01]), )+([1-9]|[12][0-9]|3[01])$",
+            message.text):
+        await message.answer(
+            'Неправильный формат ввода даты!\n\n'
+            'Введи в формате: 1, 21, 26'
+        )
+    else:
+        await db.update_master_worktime(
+            telegram_id=telegram_id,
+            work_graphic=message.text,
+            query_data='days_off'
+        )
+        await message.answer(
+            'График обновлен!',
+            reply_markup=await working_time_and_days_inline(telegram_id)
+        )
+        await state.set_state(MasterActions.working_day)
 
 
 def register_master_handlers(dp: Dispatcher):
@@ -121,11 +154,16 @@ def register_master_handlers(dp: Dispatcher):
 
     )
     dp.register_message_handler(
-        update_working_hours,
-        state=MasterActions.working_hours
-    )
-    dp.register_message_handler(
         working_time_menu,
         text='График работы 📅',
         state='*'
     )
+    dp.register_message_handler(
+        update_working_hours,
+        state=MasterActions.working_hours
+    )
+    dp.register_message_handler(
+        update_days_off,
+        state=MasterActions.days_off
+    )
+

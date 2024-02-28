@@ -15,7 +15,7 @@ class Database:
         :param telegram_id:
         :return:
         """
-    async def get_master_work_graphic(self, telegram_id: int):
+    async def get_master_work_graphic(self, telegram_id: int) -> set:
         """
         Gets working graphic from database.
         :param telegram_id:
@@ -53,3 +53,14 @@ class Database:
             )
         logging.info(f'День недели: {column_name}'
                      f' c новым временем {work_graphic}')
+
+    async def get_all_masters_work_time(self):
+        """
+
+        :return:
+        """
+        with self.connection:
+            worktimes = self.cursor.execute(
+                "SELECT * FROM worktime"
+            ).fetchall()
+        return worktimes

@@ -30,11 +30,11 @@ async def cancel_state(state: FSMContext) -> None:
     :param state:
     :return: None
     """
-    current_state = await state.get_state(state)
-    if current_state is not None:
-        await state.finish()
-    else:
+    current_state = await state.get_state()
+    if current_state is None:
         pass
+    else:
+        await state.finish()
 
 
 async def start_bot(message: Message, state: FSMContext):
