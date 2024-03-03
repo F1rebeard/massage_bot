@@ -18,8 +18,12 @@ async def get_all_working_hours_and_days_off() -> [list, list]:
     all_masters_work_time = []
     # getting data for each master
     for master in masters_graphics:
+        master_id = master[0]
         if master[8] is not None:
-            days_off = master[8].split(', ')
+            if type(master[8]) is int:
+                days_off = master[8]
+            else:
+                days_off = master[8].split(', ')
         else:
             days_off = []
         logging.info(f'days_off: {days_off}')
@@ -41,6 +45,7 @@ async def get_all_working_hours_and_days_off() -> [list, list]:
                     end_time = datetime.time(end)
                     day_graphic.append((start_time, end_time))
                 weekdays_graphic.append(day_graphic)
+        logging.info(f'weekdays_graphic: {weekdays_graphic}')
         all_masters_work_time.append(weekdays_graphic)
     logging.info(f'all masters worktime: {all_masters_work_time}\n'
                  f'all days off: {days_off_sum}')
@@ -49,15 +54,20 @@ async def get_all_working_hours_and_days_off() -> [list, list]:
 
 def consolidate_intervals(intervals):
     # Sort intervals by start time
+    if not intervals:
+        return []
     intervals.sort(key=lambda x: x[0])
+    logging.info(f'intervals: {intervals}')
     consolidated = [intervals[0]]
     for current in intervals[1:]:
         prev = consolidated[-1]
         # If current overlaps prev, merge them
         if current[0] <= prev[1]:
-            prev[1] = max(prev[1], current[1])
-        # Else just append non-overlapping current interval
+            # Create a new merged interval
+            merged = [prev[0], max(prev[1], current[1])]
+            consolidated[-1] = merged
         else:
+            # No overlap, just append
             consolidated.append(current)
     return consolidated
 
@@ -71,27 +81,32 @@ async def consolidated_work_weekday_graphic_for_calendar(
     :return:
     """
     # Consolidated calendar
+    logging.info(f'all_master_weekday: {all_masters_weekday_graphic}')
     calendar = {
         1: [],  # Monday
         2: [],  # Tuesday
-        3: [],  # etc...
+        3: [],
+        4: [],
+        5: [],
+        6: [],
+        7: []
     }
     for master in all_masters_weekday_graphic:
-        enumerate(master)
+        logging.info(f'master: {master}')
         for weekday, hours in enumerate(master):
             logging.info(f'weekday: {weekday}')
+            if not hours or hours == '0':
+                continue
+            # If first time seeing this weekday, initialize empty list
             if not calendar[weekday + 1]:
                 calendar[weekday + 1] = []
-            if not hours or str(hours) == '0':
-                calendar[weekday + 1].append(None)
-            # If first time seeing this weekday, initialize empty list
-            else:
-                for start, end in hours:
-                    logging.info(f'start: {start}, end: {end}')
-                    calendar[weekday + 1].append((start, end))
+            for start, end in hours:
+                logging.info(f'start: {start}, end: {end}')
+                calendar[weekday + 1].append((start, end))
+    logging.info(f'Week hours calendar: {calendar}')
     # Consolidate intervals
     for weekday in calendar:
+        logging.info(f'weekday in calendar: {calendar[weekday]}')
         calendar[weekday] = consolidate_intervals(calendar[weekday])
-    logging.info(f'Week hours calendar: {calendar}')
     return calendar
 
