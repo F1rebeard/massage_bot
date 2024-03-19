@@ -1,6 +1,7 @@
 import logging
 
 from aiogram import Dispatcher
+from aiogram.utils.callback_data import CallbackData
 from aiogram.types import Message, CallbackQuery
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
@@ -13,6 +14,7 @@ from keyboards.user_kb import (
     extra_service_kb
 )
 from massage_calendar.massage_calendar import MassageCalendar, calendar_callback
+from massage_calendar.work_graph import check_date_is_available
 from create_bot import bot, db
 from constants import ADMIN_IDS, MASSAGES, OTHER_SERVICE, EXTRA_SERVICE
 
@@ -51,8 +53,9 @@ async def start_bot(message: Message, state: FSMContext):
             text=f'Привет, коллега {message.from_user.first_name}',
             reply_markup=admin_menu
         )
-    elif await db.get_user_by_id(telegram_id) is None:
+    elif await db.get_user_by_id(telegram_id) is False:
         # add new user to database!
+        await db.add_new_user_to_database(telegram_id)
         await message.answer(
             text='Привет! У нас здесь впервые, я помогаю записаться на массаж 😊'
                  'и ответить на интересующие вопросы 😉',
@@ -98,7 +101,11 @@ async def choose_service(query: CallbackQuery, state: FSMContext):
             )
             await state.set_state(UserActions.gift_certificate)
         elif query.data in set(MASSAGES.keys()):
+            logging.info(set(MASSAGES.keys()))
             name, time, price = get_service_info(MASSAGES, query.data)
+            data['selected_service']: str = name
+            data['primary_price'] = int(price)
+            data['service_time'] = int(time)
             basic_text = (f'Вы выбрали {name}\nДлительность: {time} мин.\n'
                           f'Стоимость: {price} руб.\n\n')
             if query.data in ('general', 'back_and_legs', 'hands_and_neck'):
@@ -113,32 +120,27 @@ async def choose_service(query: CallbackQuery, state: FSMContext):
                     text=basic_text + f'для этого массажа требуется доступное '
                                 f'время для двух мастеров.'
                                 f' ВОЗМОЖНО ПРЕДВАРИТЕЛЬНАЯ СВЯЗЬ C МАССАЖИСТОМ'
-                                f' УТОЧНИТЬ БЫ!',
-                    reply_markup=await MassageCalendar().start_calendar()
+                                f' УТОЧНИТЬ БЫ!'
                 )
-                await state.set_state(UserActions.choose_date)
             else:
                 await query.message.edit_text(
                     text=basic_text,
-                    reply_markup=await MassageCalendar().start_calendar()
+                    reply_markup=await MassageCalendar().start_calendar(state)
                 )
-                await state.set_state(UserActions.choose_date)
             # Adding data to memory
-            data['selected_service']: str = name
-            data['primary_price'] = int(price)
-            data['service_time'] = int(time)
         elif query.data in set(OTHER_SERVICE.keys()):
             name, time, price = get_service_info(OTHER_SERVICE, query.data)
             basic_text = (f'Вы выбрали {name}\nДлительность: {time} мин.\n'
                           f'Стоимость: {price} руб.\n\n')
-            await query.message.edit_text(
-                text=basic_text,
-                reply_markup=await MassageCalendar().start_calendar()
-            )
             data['selected_service']: str = name
             data['primary_price'] = int(price)
             data['service_time'] = int(time)
-
+            await query.message.edit_text(
+                text=basic_text,
+                reply_markup=await MassageCalendar().start_calendar(state)
+            )
+            await state.set_state(UserActions.choose_date)
+    await query.answer()
 
 async def choose_extra_service(query: CallbackQuery, state: FSMContext):
     """
@@ -151,12 +153,14 @@ async def choose_extra_service(query: CallbackQuery, state: FSMContext):
         if query.data == 'backward':
             await state.set_state(UserActions.choose_service)
             await query.message.edit_text(
-                text='Выберити интересующую услугу 😊',
+                text='Выберите интересующую услугу 😊',
                 reply_markup=service_inline_keyboard()
             )
         if query.data == 'select_date':
             await query.message.edit_reply_markup(
-                reply_markup=await MassageCalendar().start_calendar()
+                reply_markup=await MassageCalendar().start_calendar(
+                    state
+                )
             )
             await state.set_state(UserActions.choose_date)
         if query.data in set(EXTRA_SERVICE.keys()):
@@ -199,7 +203,7 @@ async def choose_extra_service(query: CallbackQuery, state: FSMContext):
                          f'Длительность: {total_time} мин.\n'
                          f'Стоимость: {total_price} руб.\n\n'
                          f'А теперь выберите дату сеанса 😊',
-                    reply_markup=await MassageCalendar().start_calendar()
+                    reply_markup=await MassageCalendar().start_calendar(state)
                 )
                 await query.answer()
                 await state.set_state(UserActions.choose_date)
@@ -218,9 +222,53 @@ async def show_calendar_for_user(message: Message, state: FSMContext):
     await message.answer(
         text='Выберите дату записи на массаж:\n Слова о маркировке, есть/нет'
              'записи',
-        reply_markup=await MassageCalendar().start_calendar()
+        reply_markup=await MassageCalendar().start_calendar(state)
     )
     await state.set_state(UserActions.choose_date)
+
+
+async def choose_date(
+        query: CallbackQuery,
+        callback_data: CallbackData,
+        state: FSMContext
+):
+    selected, date = await MassageCalendar().process_selection(
+        query, callback_data)
+    telegram_id = query.from_user.id
+    await MassageCalendar().day_action(query, callback_data, state)
+    if selected:
+        await db.update_chosen_date(telegram_id, date.date())
+        chosen_date = await db.get_chosen_date(telegram_id)
+        if await check_date_is_available(chosen_date) is True:
+            await query.message.answer(
+                text=f'Выбранный день - {date.strftime("%d.%m.%Y")}\n'
+                     f'Выберите удобное время для записи:',
+                reply_markup=await MassageCalendar().chosen_day()
+            )
+            await query.answer()
+        else:
+            await query.message.answer(text='В этот день нельзя записаться 😔')
+            await query.answer()
+        # if user_level == 'Старт':
+        #     workouts = await get_start_workouts_dates(telegram_id)
+        # elif telegram_id in ADMIN_IDS:
+        #     workouts = await db.workout_dates_for_admin(telegram_id)
+        # else:
+        #     workouts = await db.workout_dates_chosen_date(telegram_id)
+        # workout_dates = [
+        #     datetime.strftime(date, '%Y-%m-%d') for date in workouts]
+        # if ((await db.check_subscription_status(telegram_id)) and
+        #         (not await db.check_freeze_status(telegram_id))):
+        #     if chosen_date in workout_dates:
+        #         await query.message.answer(
+        #             text=f'Выбранный день - {date.strftime("%d.%m.%Y")}\n'
+        #             f'Действия:',
+        #             reply_markup=await MassageCalendar().chosen_day()
+        #         )
+        #         await query.answer()
+        #     else:
+        #         await query.message.answer(text='В этот день нет тренировки🏖️')
+        #         await query.answer()
 
 
 async def check_active_sessions_for_user(message: Message, state: FSMContext):
@@ -246,7 +294,7 @@ async def ask_about_massage(message: Message, state: FSMContext):
     :param state:
     :return:
     """
-    await cancel_state()
+    await cancel_state(state)
     await message.answer(
         'Отвечаю на интересующие вопросы и если нужно '
         'отправляю запрос на обратную связь от мастера с интересующими'

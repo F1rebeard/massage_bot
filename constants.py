@@ -7,6 +7,9 @@ load_dotenv()
 admin_list = os.getenv("ADMIN_IDS")
 ADMIN_IDS = list(map(int, admin_list.split(', ')))
 
+# in minutes
+INTERVAL_BTN_MASSAGES: int = 30
+
 RUS_MONTHS = {
     1: 'Январь',
     2: 'Февраль',

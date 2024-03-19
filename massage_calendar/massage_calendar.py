@@ -9,7 +9,22 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
 from create_bot import db, bot
-from constants import RUS_MONTHS
+from constants import RUS_MONTHS, INTERVAL_BTN_MASSAGES
+from massage_calendar.work_graph import check_date_is_available
+
+
+def create_time_slots_keyboard(time_slots):
+    keyboard = InlineKeyboardMarkup(row_width=5)
+    buttons = []
+    for time_slot in time_slots:
+        button = InlineKeyboardButton(
+            text=time_slot,
+            callback_data=f"book_{time_slot}"
+        )
+        buttons.append(button)
+    keyboard.add(*buttons)
+    return keyboard
+
 
 calendar_callback = CallbackData(
     'workout_calendar', 'act', 'year', 'month', 'day'
@@ -19,12 +34,15 @@ calendar_callback = CallbackData(
 class MassageCalendar:
     async def start_calendar(
             self,
+            state: FSMContext,
             year: int = datetime.now().year,
             month: int = datetime.now().month,
     ) -> InlineKeyboardMarkup:
         """
         Creates inline keyboard with the provided year and month.
         :param telegram_id
+        :param state: Need to get the massage duration for user in
+        data['service_time']
         :param int year: Year to use, if None the current years is used,
         :param int month: Year to use, if None the current month is used.
         :return:
@@ -60,11 +78,22 @@ class MassageCalendar:
                                              callback_data=ignore_callback)
                     )
                     continue
+
+                # Check if day is available
+                date_to_check = datetime(year, month, day)
+                available = await check_date_is_available(date_to_check, state)
+                # Indicate availability with a checkmark
+                if available:
+                    button_text = f'{day}✅'
+
+                else:
+                    button_text = f'{day}'
+
                 if (day == datetime.now().day) and (
                         month == datetime.now().month):
                     inline_kb.insert(
                         InlineKeyboardButton(
-                            text=f'[{day}]',
+                            text=f'[{button_text}]',
                             callback_data=calendar_callback.new(
                                 "DAY", year, month, day
                             )
@@ -73,7 +102,7 @@ class MassageCalendar:
                     continue
                 inline_kb.insert(
                     InlineKeyboardButton(
-                        str(day),
+                        button_text,
                         callback_data=calendar_callback.new(
                             "DAY", year, month, day)
                     ))
@@ -257,32 +286,7 @@ class MassageCalendar:
         await query.answer()
 
 
-async def add_workout_results(
-        message: Message,
-        state: FSMContext
-):
-    """
-    Adds workout results by user for selected workout
-    into workout_history_table.
-    :param message:
-    :param state:
-    :return:
-    """
-    telegram_id = message.from_user.id
-    workout_date = await db.get_chosen_date(telegram_id)
-    workout_hashtag = await create_hashtag(telegram_id)
-    async with state.proxy() as data:
-        data['telegram_id'] = int(telegram_id)
-        data['results'] = message.text
-        data['hashtag'] = workout_hashtag
-    await db.add_workout_result(state)
-    await message.answer(f'Результат тренировки добавлен! \n\n'
-                         f'Хэштег - {workout_hashtag}\n'
-                         f'Дата - {workout_date}')
-    await state.finish()
 
 
-def register_workout_handelrs(dp: Dispatcher):
 
-    dp.register_message_handler(add_workout_results,
-                                state=ChosenDateData.edit_result)
+#def register_workout_handelrs(dp: Dispatcher):

@@ -11,7 +11,7 @@ from constants import ADMIN_IDS, WEEKDAYS
 from create_bot import db
 from massage_calendar.work_graph import (
     get_all_working_hours_and_days_off,
-    consolidated_work_weekday_graphic_for_calendar)
+    work_weekday_graphic_for_calendar)
 from handlers.users import cancel_state
 from keyboards.master_kb import working_time_and_days_inline
 from keyboards.main_menu import admin_menu
@@ -106,7 +106,7 @@ async def update_working_hours(message: Message, state: FSMContext):
         )
         all_working_hours, days_off = await get_all_working_hours_and_days_off()
         await message.answer(
-            text=f'{await consolidated_work_weekday_graphic_for_calendar(all_working_hours)}'
+            text=f'{await work_weekday_graphic_for_calendar(all_working_hours)}'
         )
     else:
         async with state.proxy() as data:
@@ -155,7 +155,6 @@ def register_master_handlers(dp: Dispatcher):
         choose_workout_day,
         lambda query: True,
         state=MasterActions.working_day
-
     )
     dp.register_message_handler(
         working_time_menu,
