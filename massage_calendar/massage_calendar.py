@@ -34,7 +34,7 @@ calendar_callback = CallbackData(
 class MassageCalendar:
     async def start_calendar(
             self,
-            state: FSMContext,
+            service_time: int,
             year: int = datetime.now().year,
             month: int = datetime.now().month,
     ) -> InlineKeyboardMarkup:
@@ -66,7 +66,6 @@ class MassageCalendar:
                     day,
                     callback_data=ignore_callback)
             )
-
         # Days rows - Days of Month
         month_calendar = calendar.monthcalendar(year, month)
         for week in month_calendar:
@@ -81,7 +80,8 @@ class MassageCalendar:
 
                 # Check if day is available
                 date_to_check = datetime(year, month, day)
-                available = await check_date_is_available(date_to_check, state)
+                available = await check_date_is_available(date_to_check,
+                                                          service_time)
                 # Indicate availability with a checkmark
                 if available:
                     button_text = f'{day}✅'

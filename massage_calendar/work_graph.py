@@ -171,24 +171,22 @@ async def get_working_hours_for_date(date: datetime) -> [list, list, list]:
 
 
 async def check_date_is_available(date: datetime,
-                                  state: FSMContext) -> bool:
+                                  service_time: int) -> bool:
     """
     Checks if date is available for massage session.
     :param date:
     :param state:
     :return:
     """
-    async with state.proxy() as data:
-        logging.info(f'SERVICE TIME!!! {data["service_time"]}')
-        time_duration = data['service_time']
-        (consolidated_hours,
-         master_1_hours,
-         master_2_hours) = await get_working_hours_for_date(date)
-        available = bool(
-            generate_time_slots(
-                consolidated_hours,
-                time_duration,
-                INTERVAL_BTN_MASSAGES
-            )
+    time_duration = service_time
+    (consolidated_hours,
+     master_1_hours,
+     master_2_hours) = await get_working_hours_for_date(date)
+    available = bool(
+        generate_time_slots(
+            consolidated_hours,
+            time_duration,
+            INTERVAL_BTN_MASSAGES
         )
+    )
     return available

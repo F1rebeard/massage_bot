@@ -108,6 +108,7 @@ async def choose_service(query: CallbackQuery, state: FSMContext):
             data['service_time'] = int(time)
             basic_text = (f'Вы выбрали {name}\nДлительность: {time} мин.\n'
                           f'Стоимость: {price} руб.\n\n')
+            logging.info(f'Before else {data["service_time"]}')
             if query.data in ('general', 'back_and_legs', 'hands_and_neck'):
                 await query.message.edit_text(
                     text=basic_text + f'Так же вы можете выбрать'
@@ -123,9 +124,12 @@ async def choose_service(query: CallbackQuery, state: FSMContext):
                                 f' УТОЧНИТЬ БЫ!'
                 )
             else:
+                logging.info(f'After else {data["service_time"]}')
                 await query.message.edit_text(
                     text=basic_text,
-                    reply_markup=await MassageCalendar().start_calendar(state)
+                    reply_markup=await MassageCalendar().start_calendar(
+                        service_time=data['service_time'],
+                    )
                 )
             # Adding data to memory
         elif query.data in set(OTHER_SERVICE.keys()):
@@ -137,7 +141,9 @@ async def choose_service(query: CallbackQuery, state: FSMContext):
             data['service_time'] = int(time)
             await query.message.edit_text(
                 text=basic_text,
-                reply_markup=await MassageCalendar().start_calendar(state)
+                reply_markup=await MassageCalendar().start_calendar(
+                    service_time=data['service_time'],
+                )
             )
             await state.set_state(UserActions.choose_date)
     await query.answer()
