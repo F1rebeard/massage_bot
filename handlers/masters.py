@@ -10,7 +10,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from constants import ADMIN_IDS, WEEKDAYS
 from create_bot import db
 from massage_calendar.work_graph import (
-    get_all_working_hours_and_days_off,
+    get_all_working_hours,
     work_weekday_graphic_for_calendar)
 from handlers.users import cancel_state
 from keyboards.master_kb import working_time_and_days_inline
@@ -104,7 +104,7 @@ async def update_working_hours(message: Message, state: FSMContext):
             'Введи в формате 9-12, 13-20 или 9-21 (без перерыва)',
             reply_markup=admin_menu
         )
-        all_working_hours, days_off = await get_all_working_hours_and_days_off()
+        all_working_hours = await get_all_working_hours()
         await message.answer(
             text=f'{await work_weekday_graphic_for_calendar(all_working_hours)}'
         )

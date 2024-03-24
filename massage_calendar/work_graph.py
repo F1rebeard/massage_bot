@@ -1,14 +1,11 @@
 import logging
 import datetime
 
-from aiogram.dispatcher import FSMContext
-
 from create_bot import db
 from constants import INTERVAL_BTN_MASSAGES
 
 
-
-async def get_all_working_hours_and_days_off() -> [list, list]:
+async def get_all_working_hours() -> [list, list]:
     """
     Return a list of all days off for a month and list of working hours for
     each master for each weekday.
@@ -17,25 +14,11 @@ async def get_all_working_hours_and_days_off() -> [list, list]:
     days_off_sum = [2, 6, 15, 31]
     """
     masters_graphics = await db.get_all_masters_work_time()
-    # total days off for all masters
-    days_off_sum = []
     all_masters_work_time = []
     # getting data for each master
     for master in masters_graphics:
-        master_id = master[0]
-        if master[8] is not None:
-            if type(master[8]) is int:
-                days_off = master[8]
-            else:
-                days_off = master[8].split(', ')
-        else:
-            days_off = []
-        logging.info(f'days_off: {days_off}')
-        for day in days_off:
-            if day not in days_off_sum:
-                days_off_sum.append(int(day))
         weekdays_graphic = []
-        # weekday from 1 to 7 is Monday, Tuesday and etc.
+        # weekday from 1 to 7 is Monday, Tuesday, etc.
         # each contains str with working hours
         for weekday in range(1, len(master)-1):
             if str(master[weekday]) == "0" or master[weekday] is None:
@@ -53,8 +36,31 @@ async def get_all_working_hours_and_days_off() -> [list, list]:
         all_masters_work_time.append(weekdays_graphic)
         for master in all_masters_work_time:
             logging.info(f'master: {master}')
-    logging.info(f'all days off: {days_off_sum}')
-    return all_masters_work_time, days_off_sum
+    return all_masters_work_time
+
+
+async def get_all_days_off() -> [list[int]]:
+    """
+    Return a list of all days off for a month for each master.
+    :return:
+    """
+    all_days_off: list = []
+    masters_graphics: set = await db.get_all_masters_work_time()
+    for master in masters_graphics:
+        days_off = master[8]
+        if days_off is not None:
+            # check if there is one day only
+            if len(days_off) == 1:
+                days_off = int(days_off)
+            else:
+                days_off = master[8].split(', ')
+        else:
+            days_off = []
+        logging.info(f'master days off: {days_off}')
+        for day in days_off:
+            if day not in all_days_off:
+                all_days_off.append(int(day))
+    return all_days_off
 
 
 def consolidate_intervals(intervals):
@@ -99,9 +105,7 @@ async def work_weekday_graphic_for_calendar(
     }
     count: int = 1
     for master in all_masters_weekday_graphic:
-        logging.info(f'master: {master}')
         for weekday, hours in enumerate(master):
-            logging.info(f'weekday: {weekday}')
             if not hours or hours == '0':
                 continue
             # If first time seeing this weekday, initialize empty list
@@ -112,7 +116,6 @@ async def work_weekday_graphic_for_calendar(
                 calendar[weekday + 1][0].append((start, end))
             calendar[weekday + 1][1].append(hours)
         count += 1
-    logging.info(f'Week hours calendar: {calendar}')
     # Consolidate intervals
     for weekday in calendar:
         logging.info(f'weekday in calendar: {calendar[weekday][0]}')
@@ -156,7 +159,7 @@ async def get_working_hours_for_date(date: datetime) -> [list, list, list]:
     # Get the weekday as an integer (0 = Monday, 6 = Sunday)
     weekday = date.weekday() + 1
 
-    all_masters_worktime, days_off = await get_all_working_hours_and_days_off()
+    all_masters_worktime = await get_all_working_hours()
     # Retrieve the master's work schedule from the database or other data source
     work_schedule = await work_weekday_graphic_for_calendar(
         all_masters_worktime
@@ -171,22 +174,38 @@ async def get_working_hours_for_date(date: datetime) -> [list, list, list]:
 
 
 async def check_date_is_available(date: datetime,
-                                  service_time: int) -> bool:
+                                  service_time: int) -> tuple[bool, list]:
     """
     Checks if date is available for massage session.
-    :param date:
-    :param state:
+    :param date: date to check for availability.
+    :param service_time: length of massage procedure in minutes.
     :return:
     """
     time_duration = service_time
     (consolidated_hours,
      master_1_hours,
      master_2_hours) = await get_working_hours_for_date(date)
-    available = bool(
-        generate_time_slots(
+    time_slots = generate_time_slots(
             consolidated_hours,
             time_duration,
             INTERVAL_BTN_MASSAGES
         )
-    )
-    return available
+    if len(time_slots) == 0:
+        available = False
+    else:
+        available = True
+    return available, time_slots
+
+
+async def check_if_date_is_day_off(date: datetime, all_days_of: list) -> bool:
+    """
+    Checks if the current day of month in calendar is day off or not.
+    :param date: The date for which to check if it is day off.
+    :param all_days_of: list of all days of the month.
+    :return:
+    """
+    if date.day in all_days_of:
+        return True
+    else:
+        return False
+

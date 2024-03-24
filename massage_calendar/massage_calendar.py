@@ -10,7 +10,10 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 
 from create_bot import db, bot
 from constants import RUS_MONTHS, INTERVAL_BTN_MASSAGES
-from massage_calendar.work_graph import check_date_is_available
+from massage_calendar.work_graph import (check_date_is_available,
+                                         check_if_date_is_day_off,
+                                         get_all_days_off,
+                                         generate_time_slots)
 
 
 def create_time_slots_keyboard(time_slots):
@@ -40,13 +43,14 @@ class MassageCalendar:
     ) -> InlineKeyboardMarkup:
         """
         Creates inline keyboard with the provided year and month.
-        :param telegram_id
-        :param state: Need to get the massage duration for user in
-        data['service_time']
+        :param service_time: Length of the massage for current booking.
         :param int year: Year to use, if None the current years is used,
         :param int month: Year to use, if None the current month is used.
         :return:
         """
+        # Getting all days off of Month
+        days_off = await get_all_days_off()
+
         inline_kb = InlineKeyboardMarkup(row_width=7)
         # for buttons with no answer
         ignore_callback = calendar_callback.new("IGNORE", year, month, 0)
@@ -80,15 +84,17 @@ class MassageCalendar:
 
                 # Check if day is available
                 date_to_check = datetime(year, month, day)
-                available = await check_date_is_available(date_to_check,
-                                                          service_time)
+                available = (await check_date_is_available(date_to_check,
+                                                          service_time))[0]
+                is_day_off = await check_if_date_is_day_off(date_to_check,
+                                                            days_off)
                 # Indicate availability with a checkmark
-                if available:
+                if available and not is_day_off:
                     button_text = f'{day}✅'
-
+                elif is_day_off:
+                    button_text = f'🏝️'
                 else:
                     button_text = f'{day}'
-
                 if (day == datetime.now().day) and (
                         month == datetime.now().month):
                     inline_kb.insert(
@@ -133,33 +139,27 @@ class MassageCalendar:
         return inline_kb
 
     async def chosen_day(self,
-                         year: int = datetime.now().year,
-                         month: int = datetime.now().month,
+                         service_time: int,
+                         telegram_id: int,
                          ) -> InlineKeyboardMarkup:
-        inline_kb = InlineKeyboardMarkup(row_width=1)
-        inline_kb.add(
-            InlineKeyboardButton(
-                'Получить задание 🏋️‍',
-                callback_data=calendar_callback.new(
-                    "GET_WORKOUT", year, month, 0)
-            ),
-            InlineKeyboardButton(
-                'Записать результат ✏️',
-                callback_data=calendar_callback.new(
-                    "EDIT_RESULTS", year, month, 0)
-            ),
-            InlineKeyboardButton(
-                'Посмотреть результаты  ️🕵️‍♂',
-                callback_data=calendar_callback.new(
-                    "VIEW_RESULTS", year, month, 0)
-            )
-        )
+        """
+
+        :param service_time:
+        :param telegram_id:
+        :return:
+        """
+        time_slots = (await check_date_is_available(
+            date=await db.get_chosen_date(telegram_id),
+            service_time=service_time,
+        ))
+        inline_kb = create_time_slots_keyboard(time_slots=time_slots)
         return inline_kb
 
     async def process_selection(
             self,
             query: CallbackQuery,
-            data: CallbackData
+            data: CallbackData,
+            service_time: int,
     ) -> tuple:
         """
         Process the callback_query. This method generates a new massage_calendar if
@@ -167,6 +167,7 @@ class MassageCalendar:
          a CallbackQueryHandler.
         :param query: callback_query, as provided by the CallbackQueryHandler
         :param data: callback_data, dictionary, set by calendar_callback
+        :param state: FSMContext
         :return: Returns a tuple (Boolean,datetime), indicating if a date
          is selected and returning the date if so.
         """
@@ -179,14 +180,14 @@ class MassageCalendar:
             prev_date = temp_date - timedelta(days=1)
             await query.message.edit_reply_markup(
                 await self.start_calendar(
-                    telegram_id=query.from_user.id,
+                    service_time=service_time,
                     year=int(prev_date.year),
                     month=int(prev_date.month)))
         if data['act'] == "NEXT-MONTH":
             next_date = temp_date + timedelta(days=31)
             await query.message.edit_reply_markup(
                 await self.start_calendar(
-                    telegram_id=query.from_user.id,
+                    service_time=service_time,
                     year=int(next_date.year),
                     month=int(next_date.month)))
         if data['act'] == "DAY":

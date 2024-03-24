@@ -148,6 +148,7 @@ async def choose_service(query: CallbackQuery, state: FSMContext):
             await state.set_state(UserActions.choose_date)
     await query.answer()
 
+
 async def choose_extra_service(query: CallbackQuery, state: FSMContext):
     """
     Choose extra service as optional
@@ -238,18 +239,32 @@ async def choose_date(
         callback_data: CallbackData,
         state: FSMContext
 ):
+    """
+
+    :param query:
+    :param callback_data:
+    :param state:
+    :return:
+    """
+    async with state.proxy() as data:
+        service_time = data['service_time']
     selected, date = await MassageCalendar().process_selection(
-        query, callback_data)
+        query, callback_data, service_time=service_time)
     telegram_id = query.from_user.id
+
     await MassageCalendar().day_action(query, callback_data, state)
     if selected:
         await db.update_chosen_date(telegram_id, date.date())
         chosen_date = await db.get_chosen_date(telegram_id)
-        if await check_date_is_available(chosen_date) is True:
+        available = (
+            await check_date_is_available(chosen_date, service_time))[0]
+        if available:
             await query.message.answer(
                 text=f'Выбранный день - {date.strftime("%d.%m.%Y")}\n'
                      f'Выберите удобное время для записи:',
-                reply_markup=await MassageCalendar().chosen_day()
+                reply_markup=await MassageCalendar().chosen_day(
+                    service_time, telegram_id
+                )
             )
             await query.answer()
         else:
@@ -309,6 +324,11 @@ async def ask_about_massage(message: Message, state: FSMContext):
 
 
 def register_user_handlers(dp: Dispatcher):
+    dp.register_callback_query_handler(
+        choose_date,
+        calendar_callback.filter(),
+        state='*'
+    )
     dp.register_callback_query_handler(
         choose_service,
         lambda query: True,
