@@ -104,8 +104,6 @@ class Database:
                 f"SET {column_name} = ? "
                 f"WHERE master_id = ?", (work_graphic, telegram_id)
             )
-        logging.info(f'День недели: {column_name}'
-                     f' c новым временем {work_graphic}')
 
     async def get_all_masters_work_time(self):
         """

@@ -13,7 +13,9 @@ from constants import RUS_MONTHS, INTERVAL_BTN_MASSAGES
 from massage_calendar.work_graph import (check_date_is_available,
                                          check_if_date_is_day_off,
                                          get_all_days_off,
-                                         generate_time_slots)
+                                         get_all_working_hours,
+                                         work_weekday_graphic_for_calendar,
+                                         get_consolidated_hours_for_date)
 
 
 def create_time_slots_keyboard(time_slots):
@@ -51,6 +53,13 @@ class MassageCalendar:
         # Getting all days off of Month
         days_off = await get_all_days_off()
 
+        # Getting all working hours for a week for all masters
+        masters_working_hours = await get_all_working_hours()
+
+        # weekday schedule
+        weekday_schedule = await work_weekday_graphic_for_calendar(
+            masters_working_hours,
+        )
         inline_kb = InlineKeyboardMarkup(row_width=7)
         # for buttons with no answer
         ignore_callback = calendar_callback.new("IGNORE", year, month, 0)
@@ -84,8 +93,13 @@ class MassageCalendar:
 
                 # Check if day is available
                 date_to_check = datetime(year, month, day)
-                available = (await check_date_is_available(date_to_check,
-                                                          service_time))[0]
+                consolidated_hours = await get_consolidated_hours_for_date(
+                    date_to_check, weekday_schedule
+                )
+                available = (await check_date_is_available(
+                    date_to_check,
+                    consolidated_hours,
+                    service_time))[0]
                 is_day_off = await check_if_date_is_day_off(date_to_check,
                                                             days_off)
                 # Indicate availability with a checkmark
@@ -214,31 +228,7 @@ class MassageCalendar:
         """
         telegram_id = query.from_user.id
         chosen_date = await db.get_chosen_date(telegram_id)
-        user_level = await db.get_user_level(telegram_id)
-        if data['act'] == "GET_WORKOUT":
-            if telegram_id in ADMIN_IDS:
-                await state.set_state(ChosenDateData.for_admin)
-                await bot.send_message(
-                    text='Выбери для какого уровня посмотреть тренировку:',
-                    chat_id=telegram_id,
-                    reply_markup=choose_kb
-                )
-            else:
-                workout_hashtag = await create_hashtag(telegram_id)
-                if user_level == 'Старт':
-                    first_day = await first_day_for_start(telegram_id)
-                    chosen_date = datetime.strptime(
-                        chosen_date, '%Y-%m-%d').date()
-                    workout_day = (chosen_date - first_day).days
-                    chosen_workout = await db.get_start_workout_for_user(
-                        workout_day=workout_day
-                    )
-                else:
-                    chosen_workout = await db.get_workout_for_user(
-                        chosen_date,
-                        telegram_id
-                    )
-                chosen_warm_up = await choosing_warm_up_protocol(chosen_workout)
+        if data['act'] == 'GET_WORKOUT':
                 await query.message.answer(text=chosen_warm_up,
                                            parse_mode=ParseMode.HTML,
                                            protect_content=True)

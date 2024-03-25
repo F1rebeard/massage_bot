@@ -5,7 +5,7 @@ from create_bot import db
 from constants import INTERVAL_BTN_MASSAGES
 
 
-async def get_all_working_hours() -> [list, list]:
+async def get_all_working_hours() -> list:
     """
     Return a list of all days off for a month and list of working hours for
     each master for each weekday.
@@ -91,8 +91,6 @@ async def work_weekday_graphic_for_calendar(
     :param all_masters_weekday_graphic:
     :return:
     """
-    # Consolidated calendar
-    logging.info(f'all_master_weekday: {all_masters_weekday_graphic}')
     # col-1 consolidated, col-2 master-1, col-3 master-2
     calendar = {
         1: [[], [], []],  # Monday
@@ -148,10 +146,15 @@ def generate_time_slots(working_hours: list,
     return time_slots
 
 
-async def get_working_hours_for_date(date: datetime) -> [list, list, list]:
+async def get_working_hours_for_date(date: datetime,
+                                     weekday_schedule: dict) -> [list,
+                                                                 list,
+
+                                                                 list]:
     """
     Retrieves the working hours for a given date.
     :param date: The date for which to retrieve the working hours.
+    :param weekday_schedule: The weekday schedule.
     :return: A list of tuples representing the working hours for the given date.
              Each tuple contains the start and end time as datetime.time objects.
     """
@@ -159,21 +162,32 @@ async def get_working_hours_for_date(date: datetime) -> [list, list, list]:
     # Get the weekday as an integer (0 = Monday, 6 = Sunday)
     weekday = date.weekday() + 1
 
-    all_masters_worktime = await get_all_working_hours()
+    # all_masters_worktime = await get_all_working_hours()
     # Retrieve the master's work schedule from the database or other data source
-    work_schedule = await work_weekday_graphic_for_calendar(
-        all_masters_worktime
-    )
 
     # Extract the working hours for the given weekday
-    consolidated_hours = work_schedule[weekday][0]
-    master_1_hours = work_schedule[weekday][1]
-    master_2_hours = work_schedule[weekday][2]
+    consolidated_hours = weekday_schedule[weekday][0]
+    master_1_hours = weekday_schedule[weekday][1]
+    master_2_hours = weekday_schedule[weekday][2]
 
     return consolidated_hours, master_1_hours, master_2_hours
 
 
+async def get_consolidated_hours_for_date(date: datetime,
+                                          weekday_schedule: dict) -> list:
+    """
+
+    :param date: The date for which to retrieve the consolidated working hours.
+    :param weekday_schedule: The weekday schedule.
+    :return:
+    """
+    weekday = date.weekday() + 1
+    consolidated_hours = weekday_schedule[weekday][0]
+    return consolidated_hours
+
+
 async def check_date_is_available(date: datetime,
+                                  consolidated_hours: list,
                                   service_time: int) -> tuple[bool, list]:
     """
     Checks if date is available for massage session.
@@ -181,13 +195,9 @@ async def check_date_is_available(date: datetime,
     :param service_time: length of massage procedure in minutes.
     :return:
     """
-    time_duration = service_time
-    (consolidated_hours,
-     master_1_hours,
-     master_2_hours) = await get_working_hours_for_date(date)
     time_slots = generate_time_slots(
             consolidated_hours,
-            time_duration,
+            service_time,
             INTERVAL_BTN_MASSAGES
         )
     if len(time_slots) == 0:
